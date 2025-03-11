@@ -186,3 +186,7 @@ cython_debug/
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+# downloaded images
+*.gz
+downloads/
