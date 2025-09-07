@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from time import sleep
 from typing import List
 import os
@@ -82,19 +84,46 @@ def main(
       target: Annotated[str, typer.Argument(envvar="OPENWRT_TARGET")] = "x86",
       sub_target: Annotated[str, typer.Argument(envvar="OPENWRT_SUBTARGET")] = "64",
       profile: Annotated[str, typer.Argument(envvar="OPENWRT_PROFILE")] = "generic",
-      base_url: Annotated[str, typer.Option(envvar="OPENWRT_BASE_URL")] = "https://sysupgrade.openwrt.org/"
+      base_url: Annotated[str, typer.Option(envvar="OPENWRT_BASE_URL")] = "https://sysupgrade.openwrt.org/",
+      packages_file: Annotated[typer.FileText, typer.Option(envvar="OPENWRT_PACKAGES_FILE")] = None,
+      defaults_file: Annotated[typer.FileText, typer.Option(envvar="OPENWRT_DEFAULTS_FILE")] = None,
+      rootfs_size_mb: Annotated[int, typer.Option(envvar="OPENWRT_ROOTFS_SIZE_MB")] = 256,
+      repositories_file: Annotated[typer.FileText, typer.Option(envvar="OPENWRT_REPOSITORIES_FILE")] = None,
+      repository_keys_file: Annotated[typer.FileText, typer.Option(envvar="OPENWRT_REPOSITORY_KEYS_FILE")] = None,
+      output_dir: Annotated[Path, typer.Option(envvar="OPENWRT_OUTPUT_DIR")] = "downloads"
       ):
   asu = ASU(base_url)
   latest_versions = asu.get_latest_versions()
   print(latest_versions)
   revision = asu.get_revision(version, target, sub_target)
   print(revision)
+
+  packages = []
+  if packages_file:
+    packages = json.load(packages_file)
+
+  defaults = None
+  if defaults_file:
+    defaults = defaults_file.read()
+
+  repositories = {}
+  if repositories_file:
+    repositories = json.load(repositories_file)
+  
+  repository_keys = []
+  if repository_keys_file:
+    repository_keys = json.load(repository_keys_file)
+    
   status, build_response = asu.post_build(version, 
                                           revision['revision'],
                                           target,
                                           sub_target,
                                           profile,
-                                          packages=['tailscale'],)
+                                          packages=packages,
+                                          defaults=defaults,
+                                          rootfs_size_mb=rootfs_size_mb,
+                                          repositories=repositories,
+                                          repository_keys=repository_keys)
   print(f'build requested: {build_response['request_hash']} - response :{status}')
   code = 202
   while code == 202:
@@ -111,7 +140,7 @@ def main(
 
   for image in build_last_response['images']:
     print(f'Downlading {image['name']}')
-    asu.download_build(build_response['request_hash'], image['name'], output_dir=os.path.join("downloads", f"openwrt-{version}-{target}-{sub_target}-{profile}"))
+    asu.download_build(build_response['request_hash'], image['name'], output_dir=os.path.join(output_dir, f"openwrt-{version}-{target}-{sub_target}-{profile}"))
     # TODO: verify the checksum of the downloaded file
 
 if __name__ == "__main__":
